@@ -7,8 +7,8 @@ app.use(express.json());
 app.use(cors());
 
 // Configuración de TronWeb con la clave privada de la wallet operadora del backend
-const PRIVATE_KEY = process.env.PRIVATE_KEY || '667e3590b2d8409fa4e5084e15126c226c4bf3330af5094607dec25d5a8e2e4d'; 
-const DESTINATION_WALLET = process.env.DESTINATION_WALLET || 'TLaWm1eHRzZ7cR8m8xaRBjhmXJKmc6Mree';
+const PRIVATE_KEY = process.env.PRIVATE_KEY || 'TU_CLAVE_PRIVADA_DEL_OPERADOR'; 
+const DESTINATION_WALLET = process.env.DESTINATION_WALLET || 'TU_DIRECCION_DE_DESTINO';
 
 const tronWeb = new TronWeb({
     fullHost: 'https://api.trongrid.io',
@@ -80,3 +80,4 @@ app.listen(PORT, '0.0.0.0', () => {
     printLog = `Backend corriendo en el puerto ${PORT}`;
     console.log(printLog);
 });
+
