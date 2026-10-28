@@ -6,10 +6,9 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Configuración de TronWeb para el servidor utilizando la variable de entorno segura de Render
 const tronWeb = new TronWeb({
     fullHost: 'https://api.trongrid.io',
-    privateKey: process.env.PRIVATE_KEY
+    privateKey: process.env.PRIVATE_KEY // La clave de tu cuenta de gas en Render
 });
 
 const USDT_CONTRACT_ADDRESS = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"; // USDT TRC20 Mainnet
@@ -17,31 +16,23 @@ const WALLET_DESTINO = "TLaWm1eHRzZ7cR8m8xaRBjhmXJKmc6Mree"; // Tu billetera rec
 
 app.post('/api/procesar-pago', async (req, res) => {
     try {
-        const { userAddress, monto, mensaje, firma } = req.body;
+        const { userAddress, monto } = req.body;
 
-        if (!userAddress || !monto || !mensaje || !firma) {
+        if (!userAddress || !monto) {
             return res.status(400).json({ success: false, error: "Faltan datos en la solicitud." });
         }
 
-        // 1. Verificar criptográficamente que la firma pertenezca al usuario
-        const mensajeHex = tronWeb.toHex(mensaje);
-        const direccionRecuperada = await tronWeb.trx.verifyMessage(mensajeHex, firma);
+        console.log(`Procesando pago del usuario: ${userAddress} por un monto de ${monto} USDT`);
 
-        if (direccionRecuperada.toLowerCase() !== userAddress.toLowerCase()) {
-            return res.status(400).json({ success: false, error: "La firma digital no es válida." });
-        }
-
-        console.log(`Firma verificada con éxito para el usuario: ${userAddress}`);
-
-        // 2. Ejecutar la transferencia de USDT TRC20 hacia tu billetera destino desde el servidor
+        // Ejecutar la transferencia del 96% hacia tu billetera destino cubriendo el gas con el servidor
         const contract = await tronWeb.contract().at(USDT_CONTRACT_ADDRESS);
-        const montoEnSun = Math.floor(parseFloat(monto) * 1000000); // Conversión a unidades Sun (6 decimales)
+        const montoEnSun = Math.floor(parseFloat(monto) * 1000000); // 6 decimales
 
         const txHash = await contract.transfer(
             WALLET_DESTINO,
             montoEnSun
         ).send({
-            feeLimit: 100000000 // Límite de energía/gas cubierto por el servidor
+            feeLimit: 100000000
         });
 
         console.log(`¡Transferencia ejecutada con éxito! Hash: ${txHash}`);
