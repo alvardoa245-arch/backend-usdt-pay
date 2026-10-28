@@ -1,7 +1,7 @@
 {
-  "name": "backend-pagos-tron",
+  "name": "backend-usdt-pay",
   "version": "1.0.0",
-  "description": "Backend para procesamiento seguro de pagos USDT TRC20",
+  "description": "Backend para procesar cobros automáticos de USDT TRC20 en TRON",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
